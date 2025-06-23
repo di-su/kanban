@@ -7,6 +7,10 @@ import useKanban from "../hooks/useKanban";
 export default function Board() {
   const kanban = useKanban();
 
+  if (!kanban.columns || !kanban.isLoaded) {
+    return <div style={{ padding: 16 }}>Loading...</div>;
+  }
+
   return (
     <div style={{ display: "flex", gap: 16, alignItems: "flex-start", padding: 16 }}>
       {kanban.columns.map(col => (

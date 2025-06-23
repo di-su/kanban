@@ -25,16 +25,16 @@ export default function useKanban() {
   // Column operations
   const addColumn = () => {
     if (!newColumnTitle.trim()) return;
-    setColumns([...columns, { id: uid(), title: newColumnTitle, cards: [] }]);
+    setColumns([...columns!, { id: uid(), title: newColumnTitle, cards: [] }]);
     setNewColumnTitle('');
   };
 
   const deleteColumn = (colId: string) => {
-    setColumns(columns.filter(col => col.id !== colId));
+    setColumns(columns!.filter(col => col.id !== colId));
   };
 
   const renameColumn = (colId: string, newTitle: string) => {
-    setColumns(columns.map(col => 
+    setColumns(columns!.map(col => 
       col.id === colId ? { ...col, title: newTitle } : col
     ));
   };
@@ -42,25 +42,25 @@ export default function useKanban() {
   // Card operations
   const addCard = (colId: string, content: string) => {
     if (!content.trim()) return;
-    setColumns(columns.map(col =>
+    setColumns(columns!.map(col =>
       col.id === colId ? { ...col, cards: [...col.cards, { id: uid(), content }] } : col
     ));
   };
 
   const deleteCard = (colId: string, cardId: string) => {
-    setColumns(columns.map(col =>
+    setColumns(columns!.map(col =>
       col.id === colId ? { ...col, cards: col.cards.filter(card => card.id !== cardId) } : col
     ));
   };
 
   // Handle card drop - uses the drag state from useDragAndDrop
   const handleCardDrop = (toColId: string) => {
-    dnd.handleCardDrop(toColId, columns, setColumns);
+    dnd.handleCardDrop(toColId, columns!, setColumns);
   };
 
   // Handle column drop - uses the drag state from useDragAndDrop
   const handleColumnDrop = (targetColId: string) => {
-    dnd.handleColumnDrop(targetColId, columns, setColumns);
+    dnd.handleColumnDrop(targetColId, columns!, setColumns);
   };
 
   return {
