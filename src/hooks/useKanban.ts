@@ -1,19 +1,20 @@
 import { useState } from 'react';
 import useLocalStorage from './useLocalStorage';
 import useDragAndDrop from './useDragAndDrop';
+import { Column } from '../types';
 
 // Helper to generate unique ids
 const uid = () => Math.random().toString(36).slice(2, 9);
 
 export default function useKanban() {
-  const defaultColumns = [
-    { id: uid(), title: "To Do", cards: [{ id: uid(), text: "Sample Task" }] },
+  const defaultColumns: Column[] = [
+    { id: uid(), title: "To Do", cards: [{ id: uid(), content: "Sample Task" }] },
     { id: uid(), title: "In Progress", cards: [] },
     { id: uid(), title: "Done", cards: [] },
   ];
 
   // Use localStorage to persist columns
-  const [columns, setColumns] = useLocalStorage('kanban-columns', defaultColumns);
+  const [columns, setColumns] = useLocalStorage<Column[]>('kanban-columns', defaultColumns);
   
   // New column title input state
   const [newColumnTitle, setNewColumnTitle] = useState('');
@@ -28,37 +29,37 @@ export default function useKanban() {
     setNewColumnTitle('');
   };
 
-  const deleteColumn = (colId) => {
+  const deleteColumn = (colId: string) => {
     setColumns(columns.filter(col => col.id !== colId));
   };
 
-  const renameColumn = (colId, newTitle) => {
+  const renameColumn = (colId: string, newTitle: string) => {
     setColumns(columns.map(col => 
       col.id === colId ? { ...col, title: newTitle } : col
     ));
   };
 
   // Card operations
-  const addCard = (colId, text) => {
-    if (!text.trim()) return;
+  const addCard = (colId: string, content: string) => {
+    if (!content.trim()) return;
     setColumns(columns.map(col =>
-      col.id === colId ? { ...col, cards: [...col.cards, { id: uid(), text }] } : col
+      col.id === colId ? { ...col, cards: [...col.cards, { id: uid(), content }] } : col
     ));
   };
 
-  const deleteCard = (colId, cardId) => {
+  const deleteCard = (colId: string, cardId: string) => {
     setColumns(columns.map(col =>
       col.id === colId ? { ...col, cards: col.cards.filter(card => card.id !== cardId) } : col
     ));
   };
 
   // Handle card drop - uses the drag state from useDragAndDrop
-  const handleCardDrop = (toColId) => {
+  const handleCardDrop = (toColId: string) => {
     dnd.handleCardDrop(toColId, columns, setColumns);
   };
 
   // Handle column drop - uses the drag state from useDragAndDrop
-  const handleColumnDrop = (targetColId) => {
+  const handleColumnDrop = (targetColId: string) => {
     dnd.handleColumnDrop(targetColId, columns, setColumns);
   };
 

@@ -1,15 +1,20 @@
-import { useState } from "react";
+import React, { useState } from "react";
+import { Column, DraggedCard } from "../types";
 
 export default function useDragAndDrop() {
-  const [draggedCard, setDraggedCard] = useState(null); // {cardId, fromColId}
-  const [draggedColId, setDraggedColId] = useState(null); // column id being dragged
+  const [draggedCard, setDraggedCard] = useState<DraggedCard | null>(null);
+  const [draggedColId, setDraggedColId] = useState<string | null>(null);
 
   // Card drag and drop handlers
-  const handleCardDragStart = (cardId, fromColId) => {
+  const handleCardDragStart = (cardId: string, fromColId: string) => {
     setDraggedCard({ cardId, fromColId });
   };
 
-  const handleCardDrop = (toColId, columns, setColumns) => {
+  const handleCardDrop = (
+    toColId: string, 
+    columns: Column[], 
+    setColumns: React.Dispatch<React.SetStateAction<Column[]>>
+  ) => {
     if (!draggedCard) return;
     if (draggedCard.fromColId === toColId) return;
 
@@ -37,11 +42,15 @@ export default function useDragAndDrop() {
   };
 
   // Column drag and drop handlers
-  const handleColumnDragStart = (colId) => {
+  const handleColumnDragStart = (colId: string) => {
     setDraggedColId(colId);
   };
 
-  const handleColumnDrop = (targetColId, columns, setColumns) => {
+  const handleColumnDrop = (
+    targetColId: string, 
+    columns: Column[], 
+    setColumns: React.Dispatch<React.SetStateAction<Column[]>>
+  ) => {
     if (!draggedColId || draggedColId === targetColId) return;
 
     // Find indexes of source and target columns
@@ -76,9 +85,9 @@ export default function useDragAndDrop() {
     handleColumnDragStart,
     handleColumnDrop,
     handleColumnDragEnd,
-    isColumnDragged: (colId) => draggedColId === colId,
-    isCardDraggedOverColumn: (colId) =>
-      draggedCard && draggedCard.fromColId !== colId,
-    isColumnDropTarget: (colId) => draggedColId && draggedColId !== colId,
+    isColumnDragged: (colId: string) => draggedColId === colId,
+    isCardDraggedOverColumn: (colId: string) =>
+      draggedCard !== null && draggedCard.fromColId !== colId,
+    isColumnDropTarget: (colId: string) => draggedColId !== null && draggedColId !== colId,
   };
 }
