@@ -46,6 +46,17 @@ export default function Column({
     e.stopPropagation();
   };
 
+  const handleColDragOver = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+  };
+
+  const handleColDrop = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (onColDrop) onColDrop(col.id);
+  };
+
   const handleColDragEnd = (e) => {
     if (onColDragEnd) onColDragEnd();
     e.stopPropagation();
@@ -53,8 +64,14 @@ export default function Column({
 
   return (
     <div
-      onDrop={handleDrop}
-      onDragOver={handleDragOver}
+      onDragOver={(e) => {
+        handleDragOver(e);
+        handleColDragOver(e);
+      }}
+      onDrop={(e) => {
+        handleDrop(e);
+        handleColDrop(e);
+      }}
       style={{
         background: isColDragged ? "#e0eaff" : "#f3f3f3",
         borderRadius: 8,
