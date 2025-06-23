@@ -8,8 +8,16 @@ export default function Column({
   onDeleteColumn,
   onRenameColumn,
   onDragStart,
-  onDrop,
-  isDraggedOver
+  
+  isDraggedOver,
+  // Column drag and drop
+  draggable,
+  onColDragStart,
+  onColDrop,
+  onColDragOver,
+  onColDragEnd,
+  isColDragged,
+  isColDropTarget
 }) {
   const [editTitle, setEditTitle] = useState(false);
   const [title, setTitle] = useState(col.title);
@@ -22,29 +30,56 @@ export default function Column({
     }
   };
 
-  // Drag-and-drop handlers for cards
-  const handleDragOver = (e) => {
-    e.preventDefault();
-  };
 
-  const handleDrop = (e) => {
+  // Column drag handlers
+  const handleColDragStart = (e) => {
+    if (onColDragStart) onColDragStart(col.id);
+    e.stopPropagation();
+  };
+  const handleColDrop = (e) => {
+    if (onColDrop) onColDrop(col.id);
     e.preventDefault();
-    onDrop(col.id);
+    e.stopPropagation();
+  };
+  const handleColDragOver = (e) => {
+    if (onColDragOver) onColDragOver(col.id);
+    e.preventDefault();
+    e.stopPropagation();
+  };
+  const handleColDragEnd = (e) => {
+    if (onColDragEnd) onColDragEnd();
+    e.stopPropagation();
   };
 
   return (
     <div
+      draggable={draggable}
+      onDragStart={handleColDragStart}
+      onDrop={handleColDrop}
+      onDragOver={handleColDragOver}
+      onDragEnd={handleColDragEnd}
       style={{
-        background: "#f3f3f3",
+        background: isColDragged ? "#e0eaff" : "#f3f3f3",
         borderRadius: 8,
         padding: 12,
         minWidth: 220,
         boxShadow: "0 1px 4px #0001",
-        border: isDraggedOver ? "2px solid #0077ff" : "2px solid transparent"
+        border: isColDropTarget ? "2px solid #0077ff" : isDraggedOver ? "2px solid #0077ff" : "2px solid transparent",
+        opacity: isColDragged ? 0.6 : 1,
+        transition: "background 0.2s, border 0.2s"
       }}
-      onDragOver={handleDragOver}
-      onDrop={handleDrop}
     >
+      {/* Card drop zone - invisible overlay for handling card drops */}
+      <div 
+        style={{ 
+          width: '100%', 
+          height: '100%', 
+          position: 'absolute', 
+          top: 0, 
+          left: 0,
+          pointerEvents: 'none' // Let events pass through to column
+        }}
+      />
       <div style={{ display: "flex", alignItems: "center", marginBottom: 8 }}>
         {editTitle ? (
           <input
