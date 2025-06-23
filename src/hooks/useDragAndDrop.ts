@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Column, DraggedCard } from "../types";
+import { Card, Column, DraggedCard } from "../types";
 
 export default function useDragAndDrop() {
   const [draggedCard, setDraggedCard] = useState<DraggedCard | null>(null);
@@ -18,7 +18,7 @@ export default function useDragAndDrop() {
     if (!draggedCard) return;
     if (draggedCard.fromColId === toColId) return;
 
-    let cardToMove;
+    let cardToMove: Card | undefined;
     const newColumns = columns
       .map((col) => {
         if (col.id === draggedCard.fromColId) {
