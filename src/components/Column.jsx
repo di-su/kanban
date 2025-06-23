@@ -8,7 +8,7 @@ export default function Column({
   onDeleteColumn,
   onRenameColumn,
   onDragStart,
-  
+  onDrop,
   isDraggedOver,
   // Column drag and drop
   draggable,
@@ -30,22 +30,22 @@ export default function Column({
     }
   };
 
+  // Drag-and-drop handlers for cards
+  const handleDragOver = (e) => {
+    e.preventDefault();
+  };
+
+  const handleDrop = (e) => {
+    e.preventDefault();
+    onDrop(col.id);
+  };
 
   // Column drag handlers
   const handleColDragStart = (e) => {
     if (onColDragStart) onColDragStart(col.id);
     e.stopPropagation();
   };
-  const handleColDrop = (e) => {
-    if (onColDrop) onColDrop(col.id);
-    e.preventDefault();
-    e.stopPropagation();
-  };
-  const handleColDragOver = (e) => {
-    if (onColDragOver) onColDragOver(col.id);
-    e.preventDefault();
-    e.stopPropagation();
-  };
+
   const handleColDragEnd = (e) => {
     if (onColDragEnd) onColDragEnd();
     e.stopPropagation();
@@ -53,11 +53,8 @@ export default function Column({
 
   return (
     <div
-      draggable={draggable}
-      onDragStart={handleColDragStart}
-      onDrop={handleColDrop}
-      onDragOver={handleColDragOver}
-      onDragEnd={handleColDragEnd}
+      onDrop={handleDrop}
+      onDragOver={handleDragOver}
       style={{
         background: isColDragged ? "#e0eaff" : "#f3f3f3",
         borderRadius: 8,
@@ -66,7 +63,8 @@ export default function Column({
         boxShadow: "0 1px 4px #0001",
         border: isColDropTarget ? "2px solid #0077ff" : isDraggedOver ? "2px solid #0077ff" : "2px solid transparent",
         opacity: isColDragged ? 0.6 : 1,
-        transition: "background 0.2s, border 0.2s"
+        transition: "background 0.2s, border 0.2s",
+        position: "relative" // To position children properly
       }}
     >
       {/* Card drop zone - invisible overlay for handling card drops */}
@@ -80,7 +78,20 @@ export default function Column({
           pointerEvents: 'none' // Let events pass through to column
         }}
       />
-      <div style={{ display: "flex", alignItems: "center", marginBottom: 8 }}>
+      <div 
+        draggable={draggable}
+        onDragStart={handleColDragStart}
+        onDragEnd={handleColDragEnd}
+        style={{ 
+          display: "flex", 
+          alignItems: "center", 
+          marginBottom: 8, 
+          padding: "4px 6px",
+          borderRadius: "4px",
+          cursor: "move",
+          background: "#e9e9e9"
+        }}
+      >
         {editTitle ? (
           <input
             value={title}
