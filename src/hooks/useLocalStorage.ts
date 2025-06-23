@@ -1,35 +1,34 @@
 import React, { useState, useEffect } from 'react';
 
-export default function useLocalStorage<T>(key: string, initialValue: T): [T, React.Dispatch<React.SetStateAction<T>>] {
-  // Initialize state from localStorage or use initialValue
-  const [value, setValue] = useState<T>(() => {
-    // Check if we're running in the browser
-    if (typeof window === 'undefined') {
-      return initialValue;
-    }
+export default function useLocalStorage<T>(key: string, initialValue: T): [T, React.Dispatch<React.SetStateAction<T>>, boolean] {
+  // Always start with initialValue to prevent hydration mismatch
+  const [value, setValue] = useState<T>(initialValue);
+  const [mounted, setMounted] = useState(false);
+
+  // Load from localStorage after mount
+  useEffect(() => {
+    setMounted(true);
     
     try {
       const item = localStorage.getItem(key);
-      return item ? JSON.parse(item) : initialValue;
+      if (item) {
+        setValue(JSON.parse(item));
+      }
     } catch (error) {
       console.error(`Error reading localStorage key "${key}":`, error);
-      return initialValue;
     }
-  });
+  }, [key]);
 
-  // Update localStorage when state changes
+  // Update localStorage when state changes (but not on initial mount)
   useEffect(() => {
-    // Check if we're running in the browser
-    if (typeof window === 'undefined') {
-      return;
-    }
+    if (!mounted) return;
     
     try {
       localStorage.setItem(key, JSON.stringify(value));
     } catch (error) {
       console.error(`Error writing to localStorage key "${key}":`, error);
     }
-  }, [key, value]);
+  }, [key, value, mounted]);
 
-  return [value, setValue];
+  return [value, setValue, mounted];
 }

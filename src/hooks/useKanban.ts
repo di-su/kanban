@@ -14,7 +14,7 @@ export default function useKanban() {
   ];
 
   // Use localStorage to persist columns
-  const [columns, setColumns] = useLocalStorage<Column[]>('kanban-columns', defaultColumns);
+  const [columns, setColumns, isLoaded] = useLocalStorage<Column[]>('kanban-columns', defaultColumns);
   
   // New column title input state
   const [newColumnTitle, setNewColumnTitle] = useState('');
@@ -68,6 +68,7 @@ export default function useKanban() {
     columns,
     newColumnTitle,
     setNewColumnTitle,
+    isLoaded,
     
     // Column operations
     addColumn,
