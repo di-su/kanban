@@ -1,12 +1,58 @@
-# React + Vite
+# Kanban Board
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+A server-side rendered Kanban board application built with Next.js 15, React 19, and TypeScript.
 
-Currently, two official plugins are available:
+## Features
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+- **Server-Side Rendering (SSR)**: Initial page load is rendered on the server
+- **Server Actions**: All CRUD operations are handled server-side
+- **Drag and Drop**: Move cards between columns and reorder columns
+- **Persistent Storage**: Data is stored in JSON files on the server
+- **Real-time Updates**: Optimistic UI updates with server validation
 
-## Expanding the ESLint configuration
+## Tech Stack
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+- **Framework**: Next.js 15.3.4 (App Router)
+- **UI Library**: React 19.1.0
+- **Language**: TypeScript
+- **Styling**: Tailwind CSS (configured) + inline styles
+- **Storage**: File-based JSON storage
+
+## Getting Started
+
+1. Install dependencies:
+```bash
+npm install
+```
+
+2. Run the development server:
+```bash
+npm run dev
+```
+
+3. Open [http://localhost:3000](http://localhost:3000) in your browser
+
+## Project Structure
+
+```
+/app              - Next.js App Router pages
+/src
+  /components     - React components
+  /hooks         - Custom React hooks (drag & drop)
+  /lib           - Server actions and storage logic
+  /styles        - Shared styles
+  /types         - TypeScript type definitions
+/data            - JSON data storage
+```
+
+## Usage
+
+- **Add Column**: Use the form on the right to create new columns
+- **Add Card**: Use the input at the bottom of each column
+- **Edit Column Title**: Click on a column title to edit it
+- **Delete**: Click the × button on cards or columns
+- **Drag & Drop**: Drag cards between columns or reorder columns
+
+## Data Storage
+
+The application stores data in `/data/kanban.json`. This file is automatically created on first use.

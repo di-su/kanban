@@ -5,28 +5,32 @@ import { Card as CardType } from "../types";
 
 interface CardProps {
   card: CardType;
-  colId: string;
-  onDeleteCard: (colId: string, cardId: string) => void;
-  onDragStart: (cardId: string, fromColId: string) => void;
+  onDragStart: () => void;
+  onDelete: () => void;
+  disabled?: boolean;
 }
 
-export default function Card({ card, colId, onDeleteCard, onDragStart }: CardProps) {
-  // Drag handlers
+export default function Card({ card, onDragStart, onDelete, disabled }: CardProps) {
   const handleDragStart = (e: React.DragEvent<HTMLDivElement>) => {
-    onDragStart(card.id, colId);
+    onDragStart();
     e.dataTransfer.effectAllowed = "move";
   };
 
   return (
     <div
-      draggable
+      draggable={!disabled}
       onDragStart={handleDragStart}
-      style={styles.card.base}
+      style={{
+        ...styles.card.base,
+        opacity: disabled ? 0.6 : 1,
+        cursor: disabled ? 'not-allowed' : 'move'
+      }}
     >
       <span style={{ flex: 1 }}>{card.content}</span>
       <DeleteButton 
-        onClick={() => onDeleteCard(colId, card.id)} 
-        title="Delete card" 
+        onClick={onDelete} 
+        title="Delete card"
+        disabled={disabled}
       />
     </div>
   );
