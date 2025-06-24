@@ -5,6 +5,12 @@ import re
 
 import requests
 from aws import async_invoke
+from langchain_openai import ChatOpenAI
+from langchain_core.messages import SystemMessage, HumanMessage, AIMessage
+from langchain_core.output_parsers import JsonOutputParser
+from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
+from langchain_core.pydantic_v1 import BaseModel, Field
+from typing import List, Optional
 from sw.core import (
     broadcast_to_user,
     get_campaign,
@@ -15,7 +21,6 @@ from sw.core import (
 )
 from sw.errors import catch_errors
 from sw.sourcewhale import content_suggestions
-from sw.vendor.other import open_ai_chat
 
 VALID_CUSTOM_VARS = [
     "{{firstName}}",
@@ -32,6 +37,37 @@ VALID_CUSTOM_VARS = [
     "{[senderCalendarLink]}",
 ]
 
+# Pydantic models for structured output
+class CampaignTemplate(BaseModel):
+    subject: Optional[str] = Field(description="Email subject line (optional for some mail types)")
+    body: str = Field(description="Email body content with line breaks as \\n")
+    mailType: str = Field(description="Type of outreach: email, phoneCall, linkedinConnectionRequest, inmail, sms")
+
+class CampaignOutput(BaseModel):
+    title: str = Field(description="Campaign title")
+    templates: List[CampaignTemplate] = Field(description="List of campaign templates")
+
+class RegeneratedTemplate(BaseModel):
+    subject: str = Field(description="Updated subject line")
+    body: str = Field(description="Updated body content")
+
+class RegeneratedOutput(BaseModel):
+    templates: RegeneratedTemplate = Field(description="Single regenerated template")
+
+class ModificationOutput(BaseModel):
+    templates: List[RegeneratedTemplate] = Field(description="List of modified templates")
+
+# Initialize LangChain components
+llm = ChatOpenAI(
+    model="gpt-4o",
+    temperature=1,
+    max_tokens=4095,
+    timeout=45
+)
+
+modification_parser = JsonOutputParser(pydantic_object=ModificationOutput)
+regeneration_parser = JsonOutputParser(pydantic_object=RegeneratedOutput)
+campaign_parser = JsonOutputParser(pydantic_object=CampaignOutput)
 
 def validate_content(step, stepIndex, teamId):
     def text_to_html(text):
@@ -78,7 +114,7 @@ def validate_content(step, stepIndex, teamId):
 
 
 def modify_failed_steps(failedSteps):
-    systemPrompt = """As a chatbot designed to help users update content, your job is to remove the provided words that are considered spammy, make the content more concise, remove any "hope", "trust", or "well" phrases, remove any invalid custom variables, and replace any text wrapped with [] with {[]} instead, (so that the updated text has both [] and {}), whilst ensuring that the content still reads well.
+    system_prompt = """As a chatbot designed to help users update content, your job is to remove the provided words that are considered spammy, make the content more concise, remove any "hope", "trust", or "well" phrases, remove any invalid custom variables, and replace any text wrapped with [] with {[]} instead, (so that the updated text has both [] and {}), whilst ensuring that the content still reads well.
 
         # **Subject:**
         This is text that needs to be updated.
@@ -90,14 +126,10 @@ def modify_failed_steps(failedSteps):
 
         # **Invalid Custom Variables:** These are the invalid custom variables that need to be removed from the text.
 
-        ## Example JSON Structure
+        Return your response as JSON with this structure:
+        {"templates": [{"subject": "Updated subject", "body": "Updated body"}, ...]}"""
 
-        Your output should be structured in JSON format as follows, for example:
-
-        {{"templates":{{"subject":"The updated subject","body": "The updated body"}}"""
-
-    samplePrompt = {
-        "user": """
+    sample_user = """
             **Subject:**
             "Opportunity for Senior Software Architect with 15+ Years Experience"
 
@@ -116,54 +148,50 @@ def modify_failed_steps(failedSteps):
 
             **Spam words:** ["call", "please", "regarding", "offer", "opportunity"]
 
-            **Invalid Custom Variables:** ["{{invalidVar}}"]
-            """,
-        "assistant": """{{"templates": [{{"subject":"Senior Software Architect with 15+ Years Experience","body": Dear {{firstName}},\\n\\nFollowing up on my previous email about the Senior Software Architect position. This candidate has over 15 years of experience in Microservices, cloud computing, and DevOps.\\n\\nThey are well-versed in agile methodologies and available for remote work – a perfect fit for {{company}}'s needs.\\n\\nCould we explore this opportunity further?\\n\\nBest regards,\\n{[senderFirstName]},{{"subject":"Exciting role at Innovatech Solutions!","body": Hi {{firstName}},\\n\\nFollowing up on my previous email about the Full Stack Developer position at Innovatech Solutions. Your expertise in React, Node.js, and MongoDB align perfectly with our requirements.\\n\\nWe provide a culture of continuous learning, competitive compensation, and flexible work arrangements. If you're still interested, use this link to schedule a brief introductory chat: {[senderCalendarLink]}.\\n\\nLooking forward to connecting,\\n{[senderFirstName]}]}""",
-    }
+            **Invalid Custom Variables:** ["{{invalidVar}}"]"""
 
-    userPrompt = create_modification_prompt(failedSteps)
+    sample_assistant = """{"templates": [{"subject":"Senior Software Architect with 15+ Years Experience","body": "Dear {{firstName}},\\n\\nFollowing up on my previous email about the Senior Software Architect position. This candidate has over 15 years of experience in Microservices, cloud computing, and DevOps.\\n\\nThey are well-versed in agile methodologies and available for remote work – a perfect fit for {{company}}'s needs.\\n\\nCould we explore this opportunity further?\\n\\nBest regards,\\n{[senderFirstName]}"}, {"subject":"Exciting role at Innovatech Solutions!","body": "Hi {{firstName}},\\n\\nFollowing up on my previous email about the Full Stack Developer position at Innovatech Solutions. Your expertise in React, Node.js, and MongoDB align perfectly with our requirements.\\n\\nWe provide a culture of continuous learning, competitive compensation, and flexible work arrangements. If you're still interested, use this link to schedule a brief introductory chat: {[senderCalendarLink]}.\\n\\nLooking forward to connecting,\\n{[senderFirstName]}"}]}"""
 
-    maxRetries = 3
-    retries = 0
-
+    user_prompt = create_modification_prompt(failedSteps)
+    
+    # Create the chain with few-shot examples
     messages = [
-        {"role": "system", "content": systemPrompt},
-        {"role": "user", "content": samplePrompt["user"]},
-        {"role": "assistant", "content": samplePrompt["assistant"]},
-        {"role": "user", "content": userPrompt},
+        SystemMessage(content=system_prompt + "\n" + modification_parser.get_format_instructions()),
+        HumanMessage(content=sample_user),
+        AIMessage(content=sample_assistant),
+        HumanMessage(content=user_prompt)
     ]
 
-    while retries < maxRetries:
-        finalContent = open_ai_chat(
-            messages,
-            temperature=1,
-            asyncKey=False,
-            maxTokens=4095,
-            timeout=45,
-            jsonMode=True,
-            model="gpt-4o",
-        )
+    max_retries = 3
+    retries = 0
 
-        updatedData = json.loads(finalContent[0]).get("templates", [])
+    while retries < max_retries:
+        try:
+            response = llm.invoke(messages)
+            parsed_response = modification_parser.parse(response.content)
+            
+            # Validate we have the correct number of templates
+            if len(parsed_response.templates) == len(failedSteps):
+                break
+                
+            retries += 1
+            print(f"Attempt {retries}: Incorrect number of templates. Retrying...")
+            
+        except Exception as e:
+            retries += 1
+            print(f"Attempt {retries}: Error parsing response: {e}. Retrying...")
 
-        # We have the correct number of templates
-        if isinstance(updatedData, list) and len(updatedData) == len(failedSteps):
-            break
-
-        retries += 1
-        print(f"Attempt {retries}: Incorrect number of templates. Retrying...")
-
-    if retries == maxRetries:
+    if retries == max_retries:
         print("Max retries reached. Aborting the modification process.")
         return failedSteps
 
     return [
         {
             **originalStep,
-            "body": updatedStep["body"],
-            "subject": updatedStep["subject"],
+            "body": updated_step.body,
+            "subject": updated_step.subject,
         }
-        for (originalStep, _), updatedStep in zip(failedSteps, updatedData)
+        for (originalStep, _), updated_step in zip(failedSteps, parsed_response.templates)
     ]
 
 
@@ -192,7 +220,7 @@ def process_content_validation(content, teamId, stepIndex=0, threshold=70):
 
 @catch_errors()
 def chatbot_regenerate_response(userId, teamId, body):
-    systemPrompt = """As a chatbot designed to help users update content, your job is to reword the content, whilst ensuring that the content is still concise. Make sure that both the Subject and Body are updated. The number of templates returned must match the number of templates submitted by the user. Never use the phrase "I hope this email/message finds you well". Never use emojis."
+    system_prompt = """As a chatbot designed to help users update content, your job is to reword the content, whilst ensuring that the content is still concise. Make sure that both the Subject and Body are updated. The number of templates returned must match the number of templates submitted by the user. Never use the phrase "I hope this email/message finds you well". Never use emojis.
 
         # **Subject:**
         This is text that needs to be updated.
@@ -200,26 +228,20 @@ def chatbot_regenerate_response(userId, teamId, body):
         # **Body:**
         This is the text that needs to be updated with \\n for line breaks.
 
-        ## Example JSON Structure
+        Return your response as JSON with this structure:
+        {"templates": {"subject": "Updated subject", "body": "Updated body"}}"""
 
-        Your output should be structured in JSON format as follows, for example:
-
-        {{"templates":{{"subject":"The updated subject","body": "The updated body"}}"""
-
-    samplePrompt = {
-        "user": """
-
+    sample_user = """
             **Subject:**
             "{{firstName}}, A Creative Opportunity Awaits"
 
             **Body:**
             "Hey {{firstName}},\n\nIt's {[senderFirstName]} from DesignSphere,\n\nGot a minute to chat?\n We have an exciting Graphics Designer role in London.\nLet's connect!\n\nBest,\n{[senderFirstName]}"
+            """
 
-            """,
-        "assistant": """{{"templates": {{"subject":"An Exciting Opportunity Awaits!","body": It's {[senderFirstName]} from DesignSphere,\\n\\nWe have a promising Graphics Designer role in London.\\n\\nLet's chat! Best,\\n{[senderFirstName]}""",
-    }
+    sample_assistant = """{"templates": {"subject":"An Exciting Opportunity Awaits!","body": "It's {[senderFirstName]} from DesignSphere,\\n\\nWe have a promising Graphics Designer role in London.\\n\\nLet's chat! Best,\\n{[senderFirstName]}"}}"""
 
-    userPrompt = f"""
+    user_prompt = f"""
         **Subject:**
         {body["subject"]}
 
@@ -228,46 +250,43 @@ def chatbot_regenerate_response(userId, teamId, body):
     """
 
     messages = [
-        {"role": "system", "content": systemPrompt},
-        {"role": "user", "content": samplePrompt["user"]},
-        {"role": "assistant", "content": samplePrompt["assistant"]},
-        {"role": "user", "content": userPrompt},
+        SystemMessage(content=system_prompt + "\n" + regeneration_parser.get_format_instructions()),
+        HumanMessage(content=sample_user),
+        AIMessage(content=sample_assistant),
+        HumanMessage(content=user_prompt)
     ]
 
-    maxRetries = 3
+    max_retries = 3
     retries = 0
-    originalBody = body["body"]
+    original_body = body["body"]
 
-    while retries < maxRetries:
-        regeneratedStep = open_ai_chat(
-            messages,
-            temperature=1,
-            asyncKey=False,
-            maxTokens=4095,
-            timeout=45,
-            jsonMode=True,
-            model="gpt-4o",
-        )
+    while retries < max_retries:
+        try:
+            response = llm.invoke(messages)
+            parsed_response = regeneration_parser.parse(response.content)
+            
+            new_body = parsed_response.templates.body
+            
+            if new_body != original_body:
+                data = {"content": {"templates": parsed_response.templates.dict()}, "id": body["messageId"]}
+                break
+                
+            retries += 1
+            print(f"Attempt {retries}: Generated content is the same as original. Retrying...")
+            
+        except Exception as e:
+            retries += 1
+            print(f"Attempt {retries}: Error parsing response: {e}. Retrying...")
 
-        data = {"content": json.loads(regeneratedStep[0]), "id": body["messageId"]}
-
-        newBody = data["content"]["templates"]["body"]
-
-        if newBody != originalBody:
-            break
-
-        retries += 1
-        print(
-            f"Attempt {retries}: Generated content is the same as original. Retrying..."
-        )
-
-    if retries == maxRetries:
+    if retries == max_retries:
         print("Max retries reached. Using the last generated content.")
+        # Fallback to original content if all retries failed
+        data = {"content": {"templates": {"subject": body["subject"], "body": body["body"]}}, "id": body["messageId"]}
 
-    _, stepStr = body["messageId"].split("-step")
+    _, step_str = body["messageId"].split("-step")
 
     data["content"]["templates"] = process_content_validation(
-        data["content"]["templates"], teamId, int(stepStr) - 1
+        data["content"]["templates"], teamId, int(step_str) - 1
     )
 
     broadcast_to_user(
@@ -699,26 +718,30 @@ def chatbot_response(userId, teamId, body):
 
         return "\n".join(parts)
 
-    userPrompt = build_user_prompt(body)
+    user_prompt = build_user_prompt(body)
 
-    messages = add_system_and_sample_prompt(body, systemPrompt)
-    messages.append({"role": "user", "content": userPrompt})
+    # Convert the old message format to LangChain format
+    old_messages = add_system_and_sample_prompt(body, systemPrompt)
+    old_messages.append({"role": "user", "content": user_prompt})
+    
+    # Convert to LangChain message format
+    langchain_messages = []
+    for msg in old_messages:
+        if msg["role"] == "system":
+            langchain_messages.append(SystemMessage(content=msg["content"] + "\n" + campaign_parser.get_format_instructions()))
+        elif msg["role"] == "user":
+            langchain_messages.append(HumanMessage(content=msg["content"]))
+        elif msg["role"] == "assistant":
+            langchain_messages.append(AIMessage(content=msg["content"]))
 
     try:
-        initialContent = open_ai_chat(
-            messages,
-            temperature=1,
-            asyncKey=False,
-            maxTokens=4095,
-            timeout=45,
-            jsonMode=True,
-            model="gpt-4o",
-        )
+        response = llm.invoke(langchain_messages)
+        output = campaign_parser.parse(response.content)
+        output = output.dict()  # Convert to dict for compatibility with existing code
 
-    except requests.Timeout:
+    except Exception as e:
+        print(f"Error in LLM call: {e}")
         return None
-
-    output = json.loads(initialContent[0])
 
     steps = process_content_validation(output["templates"], teamId)
 
